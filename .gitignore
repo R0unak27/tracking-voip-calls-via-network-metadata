@@ -278,3 +278,8 @@ Dockerfile.prod
 # Temporary folders
 tmp/
 temp/
+
+# Python virtual environment
+venv/
+__pycache__/
+*.pyc
