@@ -74,6 +74,7 @@ elif page == "📋 Call Records":
         st.warning("⚠️ No call records found")
 
 # ============ ALERTS ============
+# ============ ALERTS ============
 elif page == "🚨 Alerts":
     st.title("🚨 Suspicious Calls & Alerts")
 
@@ -86,16 +87,32 @@ elif page == "🚨 Alerts":
         col1.metric("Total Suspicious Calls", len(alerts))
         col2.metric("High Risk (Score ≥ 70)", alerts[alerts["risk_score"] >= 70].shape[0])
 
-        # Show distribution by risk score
         if not alerts.empty:
+            # Convert call_time to datetime
+            if "call_time" in alerts.columns:
+                alerts["call_time"] = pd.to_datetime(alerts["call_time"], errors="coerce")
+
+            # Timeline chart (Suspicious calls by time)
+            if "call_time" in alerts.columns:
+                st.subheader("📈 Suspicious Calls Over Time")
+                time_counts = alerts.groupby(alerts["call_time"].dt.floor("min")).size()
+                st.line_chart(time_counts)
+
+            # Risk score distribution
+         # Risk score distribution
             st.subheader("⚠️ Risk Score Distribution (Suspicious Only)")
-            fig, ax = plt.subplots()
+
+            fig, ax = plt.subplots(figsize=(5,2))  # 👈 very compact
             ax.hist(alerts["risk_score"], bins=10, color="#FF6B6B", edgecolor="black")
             ax.set_xlabel("Risk Score")
-            ax.set_ylabel("Number of Calls")
-            st.pyplot(fig)
+            ax.set_ylabel("Calls")
+            
+            st.pyplot(fig, use_container_width=False)  # 👈 ab stretch nahi karega
 
-            # Show suspicious calls table
+
+
+
+            # Detailed suspicious calls table
             st.subheader("📋 Detailed Suspicious Calls")
             st.dataframe(alerts, use_container_width=True)
         else:
