@@ -5,8 +5,10 @@ import time
 import matplotlib.pyplot as plt
 import numpy as np
 
-API_URL = "http://localhost:5000/api/calls"
-MODAL_DURATION = 5  # seconds
+import os
+
+API_URL = os.getenv("API_URL")
+MODAL_DURATION = 3 # seconds
 
 st.set_page_config(page_title="VoIP Dashboard", layout="wide", initial_sidebar_state="expanded")
 
@@ -119,6 +121,63 @@ st.markdown("""
         color: white;
     }
     
+    /* Fixed Modal Styling - Stable display */
+    .modal-backdrop {
+        position: fixed; 
+        top: 0; 
+        left: 0; 
+        width: 100vw; 
+        height: 100vh;
+        background: rgba(0,0,0,0.8); 
+        z-index: 9999;
+        backdrop-filter: blur(5px);
+    }
+    .modal-window {
+        position: fixed; 
+        top: 50%; 
+        left: 50%; 
+        transform: translate(-50%, -50%);
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white; 
+        border-radius: 25px; 
+        box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        min-width: 400px; 
+        max-width: 90vw; 
+        padding: 2.5em; 
+        z-index: 10000;
+        text-align: center; 
+        animation: modalSlideIn 0.6s ease;
+        border: 1px solid rgba(255,255,255,0.2);
+    }
+    .modal-title {
+        font-size: 2.2em; 
+        font-weight: 700; 
+        margin-bottom: 0.5em;
+        text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    }
+    .modal-icon {
+        font-size: 3em; 
+        margin-bottom: 0.5em; 
+        display: block;
+        animation: pulse 1.5s infinite;
+    }
+    .modal-content {
+        background: rgba(255,255,255,0.1);
+        padding: 1.5rem; 
+        border-radius: 15px;
+        margin: 1rem 0; 
+        backdrop-filter: blur(10px);
+    }
+    .countdown {
+        font-size: 1em; 
+        margin-top: 1.5em; 
+        opacity: 0.8;
+        background: rgba(255,255,255,0.2); 
+        padding: 0.5rem 1rem;
+        border-radius: 20px; 
+        display: inline-block;
+    }
+    
     /* Animations */
     @keyframes slideIn {
         from { opacity: 0; transform: translateX(-20px); }
@@ -134,6 +193,15 @@ st.markdown("""
         animation: glow 2s infinite;
     }
     
+    @keyframes pulse {
+        0%, 100% { transform: scale(1); }
+        50% { transform: scale(1.1); }
+    }
+    @keyframes modalSlideIn {
+        from { opacity: 0; transform: translate(-50%, -60%) scale(0.9); }
+        to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+    }
+    
     /* Filter section */
     .filter-section {
         background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
@@ -144,9 +212,6 @@ st.markdown("""
     }
 </style>
 """, unsafe_allow_html=True)
-
-# Create empty container for modal at the top
-modal_container = st.empty()
 
 # Enhanced sidebar with custom styling
 st.sidebar.markdown("""
@@ -193,114 +258,76 @@ if not df.empty:
     st.sidebar.metric("🚨 Threats", suspicious_calls)
     st.sidebar.markdown(f"**Threat Level:** {threat_level}")
 
-# Track modal state
-if "modal_open" not in st.session_state:
-    st.session_state["modal_open"] = False
-if "modal_time" not in st.session_state:
-    st.session_state["modal_time"] = 0
+# Initialize session state variables for modal control
+if "modal_active" not in st.session_state:
+    st.session_state["modal_active"] = False
+if "modal_start_time" not in st.session_state:
+    st.session_state["modal_start_time"] = None
 if "last_alert_id" not in st.session_state:
     st.session_state["last_alert_id"] = None
-if "audio_played" not in st.session_state:
-    st.session_state["audio_played"] = False
+if "modal_should_close" not in st.session_state:
+    st.session_state["modal_should_close"] = False
 
 # System-wide alerts
 alerts = df[df["suspicious"] == True] if not df.empty and "suspicious" in df.columns else pd.DataFrame()
 latest_alert = alerts.iloc[0] if not alerts.empty else None
 latest_alert_id = str(latest_alert["_id"]) if latest_alert is not None and "_id" in latest_alert else None
 
-# Trigger modal if new suspicious call
+# Check for new alert
 if latest_alert_id and latest_alert_id != st.session_state["last_alert_id"]:
-    st.session_state["modal_open"] = True
-    st.session_state["modal_time"] = time.time()
+    st.session_state["modal_active"] = True
+    st.session_state["modal_start_time"] = time.time()
     st.session_state["last_alert_id"] = latest_alert_id
-    st.session_state["audio_played"] = False
+    st.session_state["modal_should_close"] = False
 
-# Enhanced modal with better animations
-if st.session_state["modal_open"] and latest_alert is not None:
-    elapsed_time = time.time() - st.session_state["modal_time"]
+# Modal display logic - FIXED VERSION
+if st.session_state["modal_active"] and latest_alert is not None and st.session_state["modal_start_time"]:
+    elapsed_time = time.time() - st.session_state["modal_start_time"]
     remaining_time = max(0, MODAL_DURATION - elapsed_time)
     
+    # Check if time is up
     if elapsed_time >= MODAL_DURATION:
-        st.session_state["modal_open"] = False
-        st.session_state["audio_played"] = False
-        modal_container.empty()
+        st.session_state["modal_active"] = False
+        st.session_state["modal_start_time"] = None
+        st.session_state["modal_should_close"] = True
         st.rerun()
     else:
-        if not st.session_state["audio_played"]:
-            st.markdown("<style>audio { display:none; }</style>", unsafe_allow_html=True)
-            st.audio("https://www.soundjay.com/buttons/sounds/beep-07.mp3", start_time=0)
-            st.session_state["audio_played"] = True
-        
-        with modal_container.container():
-            st.markdown(
-                f"""
-                <style>
-                .modal-backdrop {{
-                    position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-                    background: rgba(0,0,0,0.8); z-index: 9999;
-                    backdrop-filter: blur(5px);
-                }}
-                .modal-window {{
-                    position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                    color: white; border-radius: 25px; 
-                    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-                    min-width: 400px; max-width: 90vw; padding: 2.5em; z-index: 10000;
-                    text-align: center; animation: modalSlideIn 0.6s ease;
-                    border: 1px solid rgba(255,255,255,0.2);
-                }}
-                .modal-title {{
-                    font-size: 2.2em; font-weight: 700; margin-bottom: 0.5em;
-                    text-shadow: 0 2px 4px rgba(0,0,0,0.3);
-                }}
-                .modal-icon {{
-                    font-size: 3em; margin-bottom: 0.5em; display: block;
-                    animation: pulse 1.5s infinite;
-                }}
-                .modal-content {{
-                    background: rgba(255,255,255,0.1);
-                    padding: 1.5rem; border-radius: 15px;
-                    margin: 1rem 0; backdrop-filter: blur(10px);
-                }}
-                .countdown {{
-                    font-size: 1em; margin-top: 1.5em; opacity: 0.8;
-                    background: rgba(255,255,255,0.2); padding: 0.5rem 1rem;
-                    border-radius: 20px; display: inline-block;
-                }}
-                @keyframes pulse {{
-                    0%, 100% {{ transform: scale(1); }}
-                    50% {{ transform: scale(1.1); }}
-                }}
-                @keyframes modalSlideIn {{
-                    from {{ opacity: 0; transform: translate(-50%, -60%) scale(0.9); }}
-                    to {{ opacity: 1; transform: translate(-50%, -50%) scale(1); }}
-                }}
-                </style>
-                <div class="modal-backdrop"></div>
-                <div class="modal-window">
-                    <div class="modal-icon">🚨</div>
-                    <div class="modal-title">SECURITY ALERT</div>
-                    <div class="modal-content">
-                        <div style="font-size: 1.2em; margin-bottom: 1rem;">
-                            <strong>⚠️ Suspicious Activity Detected!</strong>
-                        </div>
-                        <div style="text-align: left; font-size: 1.05em; line-height: 1.6;">
-                            <strong>📞 Caller:</strong> {latest_alert['caller_id']}<br>
-                            <strong>📱 Callee:</strong> {latest_alert['callee_id']}<br>
-                            <strong>⚠️ Risk Score:</strong> <span style='background: #dc3545; padding: 3px 8px; border-radius: 10px; font-weight: bold;'>{latest_alert['risk_score']}</span><br>
-                            <strong>🌐 Source IP:</strong> {latest_alert.get('source_ip', 'N/A')}<br>
-                            <strong>🎯 Destination IP:</strong> {latest_alert.get('destination_ip', 'N/A')}
-                        </div>
+        # Show modal - Single display without multiple reruns
+        st.markdown(
+            f"""
+            <div class="modal-backdrop"></div>
+            <div class="modal-window">
+                <div class="modal-icon">🚨</div>
+                <div class="modal-title">SECURITY ALERT</div>
+                <div class="modal-content">
+                    <div style="font-size: 1.2em; margin-bottom: 1rem;">
+                        <strong>⚠️ Suspicious Activity Detected!</strong>
                     </div>
-                    <div class="countdown">⏰ Auto-closing in {remaining_time:.1f}s</div>
+                    <div style="text-align: left; font-size: 1.05em; line-height: 1.6;">
+                        <strong>📞 Caller:</strong> {latest_alert['caller_id']}<br>
+                        <strong>📱 Callee:</strong> {latest_alert['callee_id']}<br>
+                        <strong>⚠️ Risk Score:</strong> <span style='background: #dc3545; padding: 3px 8px; border-radius: 10px; font-weight: bold;'>{latest_alert['risk_score']}</span><br>
+                        <strong>🌐 Source IP:</strong> {latest_alert.get('source_ip', 'N/A')}<br>
+                        <strong>🎯 Destination IP:</strong> {latest_alert.get('destination_ip', 'N/A')}
+                    </div>
                 </div>
-                """,
-                unsafe_allow_html=True
-            )
-        time.sleep(0.5)
-        st.rerun()
-else:
-    modal_container.empty()
+                <div class="countdown">⏰ Auto-closing in {remaining_time:.1f}s</div>
+            </div>
+            
+            <script>
+                // Single auto-close timer
+                setTimeout(function() {{
+                    window.parent.postMessage({{type: 'streamlit:closeModal'}}, '*');
+                }}, {int(remaining_time * 1000) + 100});
+            </script>
+            """,
+            unsafe_allow_html=True
+        )
+        
+        # Use a controlled delay and single rerun
+        if remaining_time > 0.5:  # Only rerun if significant time remains
+            time.sleep(0.8)  # Slightly longer delay to prevent flickering
+            st.rerun()
 
 # ============ HOME PAGE ============
 if page == "🏠 Home":
@@ -593,16 +620,16 @@ elif page == "📋 Call Records":
             
             # Enhanced table styling
             def enhanced_highlight_row(row):
-             if row["risk_score"] >= 80:
-                 return ["background: linear-gradient(90deg, #ffebee, #ffcdd2); border-left: 6px solid #f44336; font-weight: bold;" for _ in row]
-             elif row["risk_score"] >= 70:
-                 return ["background: linear-gradient(90deg, #fff3e0, #ffe0b2); border-left: 6px solid #ff9800; font-weight: bold;" for _ in row]
-             elif row["risk_score"] >= 50:
-                 return ["background: linear-gradient(90deg, #fff8e1, #ffecb3); border-left: 4px solid #ffc107;" for _ in row]
-             elif row["risk_score"] >= 30:
-                 return ["background: linear-gradient(90deg, #f1f8e9, #c8e6c9); border-left: 4px solid #4caf50;" for _ in row]
-             else:
-                 return ["background: linear-gradient(90deg, #e8f5e8, #c8e6c9); border-left: 3px solid #2e7d32;" for _ in row]
+                if row["risk_score"] >= 80:
+                    return ["background: linear-gradient(90deg, #ffebee, #ffcdd2); border-left: 6px solid #f44336; font-weight: bold;" for _ in row]
+                elif row["risk_score"] >= 70:
+                    return ["background: linear-gradient(90deg, #fff3e0, #ffe0b2); border-left: 6px solid #ff9800; font-weight: bold;" for _ in row]
+                elif row["risk_score"] >= 50:
+                    return ["background: linear-gradient(90deg, #fff8e1, #ffecb3); border-left: 4px solid #ffc107;" for _ in row]
+                elif row["risk_score"] >= 30:
+                    return ["background: linear-gradient(90deg, #f1f8e9, #c8e6c9); border-left: 4px solid #4caf50;" for _ in row]
+                else:
+                    return ["background: linear-gradient(90deg, #e8f5e8, #c8e6c9); border-left: 3px solid #2e7d32;" for _ in row]
                      
             st.markdown('<div class="section-header">📋 Call Records Table</div>', unsafe_allow_html=True)
             st.dataframe(
