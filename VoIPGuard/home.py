@@ -6,15 +6,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os
 
-<<<<<<< HEAD
-import os
+
 
 API_URL = os.getenv("API_URL")
 MODAL_DURATION = 3 # seconds
-=======
-API_URL = os.getenv("API_URL") 
-MODAL_DURATION = 5  # seconds
->>>>>>> df5e6b3ee9e2b95010c3b3c35c44a67992b50e91
 
 st.set_page_config(page_title="VoIP Dashboard", layout="wide", initial_sidebar_state="expanded")
 
