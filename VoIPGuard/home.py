@@ -4,8 +4,9 @@ import requests
 import time
 import matplotlib.pyplot as plt
 import numpy as np
+import os
 
-API_URL = "http://localhost:5000/api/calls"
+API_URL = os.getenv("API_URL") 
 MODAL_DURATION = 5  # seconds
 
 st.set_page_config(page_title="VoIP Dashboard", layout="wide", initial_sidebar_state="expanded")
